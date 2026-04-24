@@ -497,16 +497,52 @@ textarea:focus-visible {
   filter: drop-shadow(0 18px 30px rgba(217, 76, 151, 0.1));
 }
 
-.study-card-face {
+.flip-card-shell {
+  position: relative;
+  min-height: 420px;
+  perspective: 1200px;
+}
+
+.preview-flip-card {
+  min-height: 360px;
+}
+
+.flip-card-face {
+  position: absolute;
+  inset: 0;
   display: grid;
   gap: 18px;
-  min-height: 420px;
   padding: 28px;
   border-radius: 28px;
+  border: 1px solid rgba(144, 51, 102, 0.12);
   background:
     radial-gradient(circle at top right, rgba(255, 214, 234, 0.9), transparent 28%),
     linear-gradient(180deg, rgba(255, 254, 255, 0.98), rgba(255, 245, 251, 0.95));
+  box-shadow: var(--shadow);
+  transition:
+    opacity 240ms ease,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   animation: card-in 220ms ease;
+}
+
+.flip-card-front {
+  opacity: 1;
+  transform: rotateY(0deg) scale(1);
+}
+
+.flip-card-back {
+  opacity: 0;
+  transform: rotateY(14deg) scale(0.985);
+}
+
+.study-card.revealed .flip-card-front {
+  opacity: 0;
+  transform: rotateY(-14deg) scale(0.985);
+}
+
+.study-card.revealed .flip-card-back {
+  opacity: 1;
+  transform: rotateY(0deg) scale(1);
 }
 
 .study-image-grid {
@@ -532,6 +568,35 @@ textarea:focus-visible {
 
 .study-hint {
   font-size: 0.92rem;
+}
+
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(58, 33, 54, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.preview-panel {
+  width: min(860px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid var(--border);
+  background: rgba(255, 250, 253, 0.97);
+  box-shadow: 0 20px 44px rgba(82, 33, 61, 0.18);
+}
+
+.preview-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
 }
 
 .button-row.center {
@@ -695,7 +760,8 @@ textarea:focus-visible {
   .header-actions,
   .button-row,
   .study-topbar,
-  .study-progress-copy {
+  .study-progress-copy,
+  .preview-topbar {
     flex-wrap: wrap;
   }
 }
@@ -709,7 +775,8 @@ textarea:focus-visible {
   .empty-card,
   .auth-panel,
   .auth-aside,
-  .study-card-face {
+  .flip-card-face,
+  .preview-panel {
     border-radius: 22px;
   }
 
@@ -718,7 +785,8 @@ textarea:focus-visible {
   .hero-card,
   .deck-card,
   .auth-panel,
-  .auth-aside {
+  .auth-aside,
+  .preview-panel {
     padding: 18px;
   }
 

@@ -39,9 +39,9 @@ type AuthDraft = {
 }
 
 type SessionStats = {
-  again: number
   easy: number
   good: number
+  hard: number
   reviewed: number
 }
 
@@ -76,9 +76,9 @@ function emptyCardDraft(): CardDraft {
 
 function emptySessionStats(): SessionStats {
   return {
-    again: 0,
     easy: 0,
     good: 0,
+    hard: 0,
     reviewed: 0,
   }
 }
@@ -218,6 +218,8 @@ function App() {
   const [cardEditorId, setCardEditorId] = useState<string | null>(null)
   const [cardComposerOpen, setCardComposerOpen] = useState(false)
   const [cardSearch, setCardSearch] = useState('')
+  const [previewCardId, setPreviewCardId] = useState<string | null>(null)
+  const [previewRevealed, setPreviewRevealed] = useState(false)
 
   const [studyQueue, setStudyQueue] = useState<string[]>([])
   const [studyIndex, setStudyIndex] = useState(0)
@@ -251,6 +253,7 @@ function App() {
 
   const currentCardId = studyQueue[studyIndex]
   const currentCard = currentCardId ? cards.find((card) => card.id === currentCardId) ?? null : null
+  const previewCard = previewCardId ? cards.find((card) => card.id === previewCardId) ?? null : null
   const sessionComplete = studyQueue.length > 0 && !currentCard
   const selectedAIPreviewCount = aiPreviewCards.filter((card) => card.selected).length
   const studyProgress = studyQueue.length ? Math.min(100, Math.round((studyIndex / studyQueue.length) * 100)) : 0
@@ -511,6 +514,11 @@ function App() {
     setCardComposerOpen(true)
   }
 
+  function openCardPreview(card: Card) {
+    setPreviewCardId(card.id)
+    setPreviewRevealed(false)
+  }
+
   function handleSaveCard(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!activeDeck || !cardDraft.front.trim() || !cardDraft.back.trim()) return
@@ -613,7 +621,7 @@ function App() {
     })
   }
 
-  function handleReview(rating: Exclude<ReviewRating, 'hard'>) {
+  function handleReview(rating: Exclude<ReviewRating, 'again'>) {
     if (!currentCard) return
 
     setCards((current) =>
@@ -624,9 +632,6 @@ function App() {
       [rating]: current[rating] + 1,
       reviewed: current.reviewed + 1,
     }))
-    if (rating === 'again') {
-      setStudyQueue((current) => [...current, currentCard.id])
-    }
     setStudyIndex((current) => current + 1)
     setRevealed(false)
   }
@@ -718,7 +723,7 @@ function App() {
 
     if (event.key === '1') {
       event.preventDefault()
-      handleReview('again')
+      handleReview('hard')
     }
 
     if (event.key === '2') {
@@ -1036,7 +1041,7 @@ function App() {
               <article className="panel">
                 <div className="section-heading">
                   <h2>{cardEditorId ? 'Edit card' : 'Add a card'}</h2>
-                  <span>Question, answer, image</span>
+                  <span>Create or update a flashcard</span>
                 </div>
                 {!cardComposerOpen ? (
                   <button className="primary-button" type="button" onClick={openNewCardComposer}>
@@ -1107,7 +1112,7 @@ function App() {
               <article className="panel">
                 <div className="section-heading">
                   <h2>AI card creation</h2>
-                  <span>{aiConfigured ? 'Optional helper' : 'Needs configuration'}</span>
+                  <span>{aiConfigured ? 'Generate from notes or PDF' : 'Needs configuration'}</span>
                 </div>
                 <p className="muted">
                   Paste notes or upload a PDF, then review the generated cards before adding them to this deck.
@@ -1257,6 +1262,9 @@ function App() {
                         <span className="muted">{formatRelativeReview(card.nextReviewAt)}</span>
                       </div>
                       <div className="button-column">
+                        <button className="secondary-button" type="button" onClick={() => openCardPreview(card)}>
+                          Preview
+                        </button>
                         <button className="secondary-button" type="button" onClick={() => openCardEditor(card)}>
                           Edit
                         </button>
@@ -1314,14 +1322,14 @@ function App() {
 
             {sessionComplete && (
               <div className="empty-card">
-                <div className="empty-illustration celebration" aria-hidden="true">
+              <div className="empty-illustration celebration" aria-hidden="true">
                   <span />
                   <span />
                   <span />
                 </div>
                 <h2>Session complete.</h2>
                 <p>
-                  Reviewed {sessionStats.reviewed} cards. Again: {sessionStats.again}, good: {sessionStats.good}, easy:{' '}
+                  Reviewed {sessionStats.reviewed} cards. Hard: {sessionStats.hard}, medium: {sessionStats.good}, easy:{' '}
                   {sessionStats.easy}.
                 </p>
                 <div className="button-row">
@@ -1343,20 +1351,38 @@ function App() {
                   type="button"
                   onClick={() => setRevealed((value) => !value)}
                 >
-                  <div className="study-card-face">
-                    <p className="eyebrow">{revealed ? 'Answer' : 'Question'}</p>
-                    {currentCard.imageUrls.length > 0 && (
-                      <div className="study-image-grid">
-                        {currentCard.imageUrls.map((imageUrl, index) => (
-                          <div key={`${currentCard.id}-${index}`} className="study-image">
-                            <img src={imageUrl} alt="" />
-                          </div>
-                        ))}
+                  <div className="flip-card-shell">
+                    <div className="flip-card-face flip-card-front">
+                      <p className="eyebrow">Question</p>
+                      {currentCard.imageUrls.length > 0 && (
+                        <div className="study-image-grid">
+                          {currentCard.imageUrls.map((imageUrl, index) => (
+                            <div key={`${currentCard.id}-front-${index}`} className="study-image">
+                              <img src={imageUrl} alt="" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="study-copy">
+                        <h2>{currentCard.front}</h2>
+                        <span className="muted">Tap to reveal the answer</span>
                       </div>
-                    )}
-                    <div className="study-copy">
-                      <h2>{revealed ? currentCard.back : currentCard.front}</h2>
-                      <span className="muted">{revealed ? 'Tap to see question again' : 'Tap to reveal the answer'}</span>
+                    </div>
+                    <div className="flip-card-face flip-card-back">
+                      <p className="eyebrow">Answer</p>
+                      {currentCard.imageUrls.length > 0 && (
+                        <div className="study-image-grid">
+                          {currentCard.imageUrls.map((imageUrl, index) => (
+                            <div key={`${currentCard.id}-back-${index}`} className="study-image">
+                              <img src={imageUrl} alt="" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="study-copy">
+                        <h2>{currentCard.back}</h2>
+                        <span className="muted">Tap to see the question again</span>
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -1364,11 +1390,11 @@ function App() {
                 <div className="study-actions">
                   {revealed ? (
                     <div className="button-row center">
-                      <button className="danger-button" type="button" onClick={() => handleReview('again')}>
-                        Again
+                      <button className="danger-button" type="button" onClick={() => handleReview('hard')}>
+                        Hard
                       </button>
                       <button className="secondary-button" type="button" onClick={() => handleReview('good')}>
-                        Good
+                        Medium
                       </button>
                       <button className="primary-button" type="button" onClick={() => handleReview('easy')}>
                         Easy
@@ -1377,13 +1403,69 @@ function App() {
                   ) : (
                     <p className="muted">Reveal the answer, then rate how well you knew it.</p>
                   )}
-                  <p className="study-hint muted">Keyboard: `space` to reveal, `1` again, `2` good, `3` easy.</p>
+                  <p className="study-hint muted">Keyboard: `space` to reveal, `1` hard, `2` medium, `3` easy.</p>
                 </div>
               </>
             )}
           </section>
         )}
       </main>
+
+      {previewCard && (
+        <div className="preview-overlay" role="dialog" aria-modal="true">
+          <div className="preview-panel">
+            <div className="preview-topbar">
+              <div>
+                <p className="eyebrow">Card preview</p>
+                <h2>{activeDeck?.title ?? 'Deck'}</h2>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setPreviewCardId(null)}>
+                Close
+              </button>
+            </div>
+            <button
+              className={previewRevealed ? 'study-card revealed' : 'study-card'}
+              type="button"
+              onClick={() => setPreviewRevealed((value) => !value)}
+            >
+              <div className="flip-card-shell preview-flip-card">
+                <div className="flip-card-face flip-card-front">
+                  <p className="eyebrow">Question</p>
+                  {previewCard.imageUrls.length > 0 && (
+                    <div className="study-image-grid">
+                      {previewCard.imageUrls.map((imageUrl, index) => (
+                        <div key={`${previewCard.id}-preview-front-${index}`} className="study-image">
+                          <img src={imageUrl} alt="" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="study-copy">
+                    <h2>{previewCard.front}</h2>
+                    <span className="muted">Tap to flip to the answer</span>
+                  </div>
+                </div>
+                <div className="flip-card-face flip-card-back">
+                  <p className="eyebrow">Answer</p>
+                  {previewCard.imageUrls.length > 0 && (
+                    <div className="study-image-grid">
+                      {previewCard.imageUrls.map((imageUrl, index) => (
+                        <div key={`${previewCard.id}-preview-back-${index}`} className="study-image">
+                          <img src={imageUrl} alt="" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="study-copy">
+                    <h2>{previewCard.back}</h2>
+                    <span className="muted">Tap to flip back to the question</span>
+                  </div>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`toast toast-${toast.tone}`} role="status" aria-live="polite">
