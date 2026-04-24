@@ -8,7 +8,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const authCookieName = 'flashcraft_session'
-const isProduction = process.env.NODE_ENV === 'production'
+const isProduction = process.env.CONTEXT === 'production'
+const isLocalDev =
+  process.env.CONTEXT === 'dev' || process.env.NETLIFY_LOCAL === 'true' || process.env.NODE_ENV === 'development'
 
 const localDataDir = path.join(process.env.TMPDIR || '/tmp', 'flashcraft-netlify-state')
 const localStoreFile = path.join(localDataDir, 'flashcraft.json')
@@ -33,8 +35,8 @@ async function kvGet(key) {
     const store = getStore({ name: 'flashcraft' })
     return await store.get(key)
   } catch {
-    if (isProduction) {
-      throw new Error('Netlify Blobs is unavailable in production.')
+    if (!isLocalDev) {
+      throw new Error('Netlify Blobs is unavailable in hosted runtime.')
     }
     // Fall back for local dev when blobs auth is unavailable.
   }
@@ -48,8 +50,8 @@ async function kvSet(key, value) {
     await store.set(key, value)
     return
   } catch {
-    if (isProduction) {
-      throw new Error('Netlify Blobs is unavailable in production.')
+    if (!isLocalDev) {
+      throw new Error('Netlify Blobs is unavailable in hosted runtime.')
     }
     // Fall back for local dev when blobs auth is unavailable.
   }
