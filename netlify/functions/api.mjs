@@ -33,6 +33,9 @@ async function kvGet(key) {
     const store = getStore({ name: 'flashcraft' })
     return await store.get(key)
   } catch {
+    if (isProduction) {
+      throw new Error('Netlify Blobs is unavailable in production.')
+    }
     // Fall back for local dev when blobs auth is unavailable.
   }
   const data = await localReadAll()
@@ -45,6 +48,9 @@ async function kvSet(key, value) {
     await store.set(key, value)
     return
   } catch {
+    if (isProduction) {
+      throw new Error('Netlify Blobs is unavailable in production.')
+    }
     // Fall back for local dev when blobs auth is unavailable.
   }
   const data = await localReadAll()
