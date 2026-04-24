@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #3a2136;
+  background:
+    radial-gradient(circle at top left, rgba(255, 147, 197, 0.34), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 206, 234, 0.42), transparent 20%),
+    linear-gradient(180deg, #fff5fb 0%, #fff0f7 50%, #fdf7ff 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --accent: #d94c97;
+  --accent-strong: #b83280;
+  --accent-soft: #ffe2f1;
+  --border: rgba(144, 51, 102, 0.12);
+  --panel: rgba(255, 250, 253, 0.82);
+  --shadow: 0 16px 36px rgba(161, 77, 118, 0.12);
+  --text-soft: #8b6178;
+  --text-strong: #451d38;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text-strong);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}

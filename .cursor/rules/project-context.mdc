@@ -1,0 +1,22 @@
+---
+description: Flashcraft product context and coding guidance
+globs:
+  - "**/*"
+alwaysApply: false
+---
+
+# Flashcraft
+
+Flashcraft is a local-first revision web app for building flashcards and revising with spaced repetition.
+
+## Product priorities
+
+- Keep the app fast and usable without a backend.
+- Prefer changes that help users create cards faster or revise more effectively.
+- Preserve the visual language: warm paper tones, teal and blue accents, and high-contrast readable panels.
+
+## Engineering guidance
+
+- Keep state easy to understand and easy to move into a backend later.
+- Avoid unnecessary dependencies unless they materially improve the study workflow.
+- When adding features, consider how they affect local persistence, export/import, and study-session flow.
