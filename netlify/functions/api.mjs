@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import Busboy from 'busboy'
-import { getStore } from '@netlify/blobs'
+import { connectLambda, getStore } from '@netlify/blobs'
 import jwt from 'jsonwebtoken'
 import OpenAI from 'openai'
 import pdfParse from 'pdf-parse/lib/pdf-parse.js'
@@ -30,9 +30,16 @@ async function localWriteAll(data) {
   await fs.promises.writeFile(localStoreFile, JSON.stringify(data, null, 2), 'utf8')
 }
 
-async function kvGet(key) {
+function getRuntimeStore(event) {
+  if (!isLocalDev) {
+    connectLambda(event)
+  }
+  return getStore({ name: 'flashcraft' })
+}
+
+async function kvGet(event, key) {
   try {
-    const store = getStore({ name: 'flashcraft' })
+    const store = getRuntimeStore(event)
     return await store.get(key)
   } catch {
     if (!isLocalDev) {
@@ -44,9 +51,9 @@ async function kvGet(key) {
   return typeof data[key] === 'string' ? data[key] : null
 }
 
-async function kvSet(key, value) {
+async function kvSet(event, key, value) {
   try {
-    const store = getStore({ name: 'flashcraft' })
+    const store = getRuntimeStore(event)
     await store.set(key, value)
     return
   } catch {
@@ -118,8 +125,8 @@ function clearSessionCookie() {
   return `${authCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`
 }
 
-async function readUsers() {
-  const raw = await kvGet('users')
+async function readUsers(event) {
+  const raw = await kvGet(event, 'users')
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
@@ -129,12 +136,12 @@ async function readUsers() {
   }
 }
 
-async function writeUsers(users) {
-  await kvSet('users', JSON.stringify(users))
+async function writeUsers(event, users) {
+  await kvSet(event, 'users', JSON.stringify(users))
 }
 
-async function readState(userId) {
-  const raw = await kvGet(`state:${userId}`)
+async function readState(event, userId) {
+  const raw = await kvGet(event, `state:${userId}`)
   if (!raw) return null
   try {
     return JSON.parse(raw)
@@ -143,8 +150,8 @@ async function readState(userId) {
   }
 }
 
-async function writeState(userId, state) {
-  await kvSet(`state:${userId}`, JSON.stringify(state))
+async function writeState(event, userId, state) {
+  await kvSet(event, `state:${userId}`, JSON.stringify(state))
 }
 
 async function getCurrentUser(event) {
@@ -156,7 +163,7 @@ async function getCurrentUser(event) {
     const decoded = jwt.verify(token, getJwtSecret())
     const userId = typeof decoded === 'object' && decoded ? decoded.sub : null
     if (typeof userId !== 'string') return null
-    const users = await readUsers()
+    const users = await readUsers(event)
     return users.find((user) => user.id === userId) ?? null
   } catch {
     return null
@@ -375,7 +382,7 @@ export const handler = async (event) => {
       return json(400, { error: 'Enter a name, a valid email, and a password with at least 8 characters.' })
     }
 
-    const users = await readUsers()
+    const users = await readUsers(event)
     if (users.some((user) => user.email === email)) {
       return json(409, { error: 'An account already exists for that email address.' })
     }
@@ -388,8 +395,8 @@ export const handler = async (event) => {
       passwordHash: await bcrypt.hash(password, 10),
     }
     users.push(user)
-    await writeUsers(users)
-    await writeState(user.id, {
+    await writeUsers(event, users)
+    await writeState(event, user.id, {
       activeDeckId: null,
       cards: [],
       decks: [],
@@ -403,7 +410,7 @@ export const handler = async (event) => {
     const body = await parseJsonBody(event)
     const email = typeof body?.email === 'string' ? normaliseEmail(body.email) : ''
     const password = typeof body?.password === 'string' ? body.password : ''
-    const users = await readUsers()
+    const users = await readUsers(event)
     const user = users.find((entry) => entry.email === email)
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -423,7 +430,7 @@ export const handler = async (event) => {
   }
 
   if (method === 'GET' && routePath === '/app-state') {
-    const state = await readState(currentUser.id)
+    const state = await readState(event, currentUser.id)
     return json(200, { state })
   }
 
@@ -438,7 +445,7 @@ export const handler = async (event) => {
       ...state,
       updatedAt: new Date().toISOString(),
     }
-    await writeState(currentUser.id, nextState)
+    await writeState(event, currentUser.id, nextState)
     return json(200, { ok: true, savedAt: nextState.updatedAt })
   }
 
