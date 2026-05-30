@@ -10,23 +10,14 @@ A simple flashcard app for macOS. Build decks, add cards, study with spaced repe
 - Five color themes (Blossom, Tide, Sprout, Ember, Paper) — your choice persists between launches
 - Auto sign-in: data stays on this device
 
-## Download
+## Install
 
-Grab the latest `Flashcraft-x.y.z-arm64.dmg` (Apple Silicon) or `Flashcraft-x.y.z.dmg` (Intel) from the [Releases page](https://github.com/hayatayubi/flashcraft/releases/latest), open the DMG, and drag `Flashcraft.app` to `/Applications`.
+1. Download the latest **[Flashcraft.dmg](https://github.com/hayatayubi/flashcraft/releases/latest)**.
+2. Open the DMG and drag `Flashcraft` into the `Applications` folder.
+3. Double-click `Flashcraft` in Applications. macOS will block it — click **OK**.
+4. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.
 
-### First launch
-
-The build is unsigned, so macOS will block it on first launch — usually with a misleading **"Flashcraft.app is damaged and can't be opened"** message. The app is fine; macOS is just refusing to run something it didn't recognise. Run this one-liner in Terminal:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Flashcraft.app && open /Applications/Flashcraft.app
-```
-
-That strips the quarantine attribute macOS attached when you downloaded the DMG. After that, double-clicking Flashcraft works normally — you only need to do this once per install. (Re-run it whenever you install a new version from a fresh download.)
-
-> The old "right-click → Open" trick stopped working reliably on macOS 15. Use the command above.
-
-Your decks live at `~/Library/Application Support/Flashcraft/` so updating the app never touches your data.
+That's it. The DMG is a universal binary, so the same download works on Apple Silicon and Intel Macs. Your decks live at `~/Library/Application Support/Flashcraft/` and are preserved across updates.
 
 ## Run from source
 
@@ -43,12 +34,7 @@ npm run electron:dev
 npm run dist:mac
 ```
 
-Outputs to `release/`:
-
-- `Flashcraft-1.0.0-arm64.dmg` — Apple Silicon
-- `Flashcraft-1.0.0.dmg` — Intel
-
-The build is unsigned. On first launch, right-click `Flashcraft.app` → Open → Open to bypass Gatekeeper.
+Outputs `release/Flashcraft.dmg` — a single universal binary (arm64 + x64), ad-hoc signed so macOS shows the "Open Anyway" flow instead of the "damaged" error.
 
 ## Refresh the app icon
 
