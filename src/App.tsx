@@ -14,17 +14,6 @@ import type { AppState, AuthUser, Card, Deck, ReviewRating } from './types'
 
 const STORAGE_KEY = 'flashcraft-local-state-v3'
 const THEME_STORAGE_KEY = 'flashcraft-theme'
-const STUDY_MODE_STORAGE_KEY = 'flashcraft-study-mode'
-
-type StudyMode = 'flip' | 'write'
-
-function loadStudyMode(): StudyMode {
-  try {
-    const stored = localStorage.getItem(STUDY_MODE_STORAGE_KEY)
-    if (stored === 'flip' || stored === 'write') return stored
-  } catch {}
-  return 'flip'
-}
 
 function normalizeAnswer(value: string): string {
   return value
@@ -249,15 +238,8 @@ function App() {
   const [studyIndex, setStudyIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [sessionStats, setSessionStats] = useState<SessionStats>(emptySessionStats())
-  const [studyMode, setStudyMode] = useState<StudyMode>(() => loadStudyMode())
   const [typedAnswer, setTypedAnswer] = useState('')
   const [answerCorrect, setAnswerCorrect] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STUDY_MODE_STORAGE_KEY, studyMode)
-    } catch {}
-  }, [studyMode])
 
   const [toast, setToast] = useState<ToastState | null>(null)
 
@@ -1122,36 +1104,6 @@ function App() {
               <button className="text-link" type="button" onClick={() => setScreen('deck')}>
                 Back to deck
               </button>
-              <div className="mode-toggle" role="tablist" aria-label="Study mode">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={studyMode === 'flip'}
-                  className={studyMode === 'flip' ? 'mode-toggle-option active' : 'mode-toggle-option'}
-                  onClick={() => {
-                    setStudyMode('flip')
-                    setRevealed(false)
-                    setAnswerCorrect(null)
-                    setTypedAnswer('')
-                  }}
-                >
-                  Flip
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={studyMode === 'write'}
-                  className={studyMode === 'write' ? 'mode-toggle-option active' : 'mode-toggle-option'}
-                  onClick={() => {
-                    setStudyMode('write')
-                    setRevealed(false)
-                    setAnswerCorrect(null)
-                    setTypedAnswer('')
-                  }}
-                >
-                  Type
-                </button>
-              </div>
               <span className="muted">
                 {Math.min(studyIndex + 1, studyQueue.length)} of {studyQueue.length || 0}
               </span>
@@ -1215,9 +1167,7 @@ function App() {
                   key={currentCard.id}
                   className={revealed ? 'study-card revealed' : 'study-card'}
                   type="button"
-                  onClick={() => {
-                    if (studyMode === 'flip') setRevealed((value) => !value)
-                  }}
+                  onClick={() => setRevealed((value) => !value)}
                 >
                   <div className="flip-card-shell">
                     <div className={`flip-card-face flip-card-front${currentCard.imageUrls.length > 0 ? ' has-image' : ''}`}>
@@ -1250,16 +1200,15 @@ function App() {
                 </button>
 
                 <div className="study-actions">
-                  {studyMode === 'write' && !revealed && (
+                  {!revealed && (
                     <form className="answer-form" onSubmit={handleCheckTypedAnswer}>
                       <label className="answer-input-label">
-                        <span>Type your answer</span>
+                        <span>Type your answer, or tap the card to flip it</span>
                         <textarea
                           rows={2}
                           value={typedAnswer}
                           onChange={(event) => setTypedAnswer(event.target.value)}
                           placeholder="Your answer..."
-                          autoFocus
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
                               event.preventDefault()
@@ -1274,7 +1223,7 @@ function App() {
                     </form>
                   )}
 
-                  {studyMode === 'write' && revealed && answerCorrect !== null && (
+                  {revealed && answerCorrect !== null && (
                     <div className={`answer-result ${answerCorrect ? 'correct' : 'incorrect'}`}>
                       <strong>{answerCorrect ? 'Correct' : 'Not quite'}</strong>
                       {!answerCorrect && (
@@ -1285,7 +1234,7 @@ function App() {
                     </div>
                   )}
 
-                  {revealed ? (
+                  {revealed && (
                     <div className="button-row center">
                       <button className="danger-button" type="button" onClick={() => handleReview('hard')}>
                         Hard
@@ -1297,13 +1246,9 @@ function App() {
                         Easy
                       </button>
                     </div>
-                  ) : studyMode === 'flip' ? (
-                    <p className="muted">Reveal the answer, then rate how well you knew it.</p>
-                  ) : null}
-
-                  {studyMode === 'flip' && (
-                    <p className="study-hint muted">Keyboard: <code>space</code> to reveal, <code>1</code> hard, <code>2</code> medium, <code>3</code> easy.</p>
                   )}
+
+                  <p className="study-hint muted">Keyboard: <code>space</code> to flip, <code>1</code> hard, <code>2</code> medium, <code>3</code> easy.</p>
                 </div>
               </>
             )}
