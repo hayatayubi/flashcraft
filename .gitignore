@@ -7,10 +7,19 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Build output
 node_modules
 dist
 dist-ssr
+release
 *.local
+
+# Electron-builder generated icons (regenerated from build/icon.svg)
+build/icon.iconset
+build/icon.icns
+build/icon.png
+
+# Secrets and local data
 .env
 server/data/*.json
 
@@ -24,6 +33,3 @@ server/data/*.json
 *.njsproj
 *.sln
 *.sw?
-
-# Local Netlify folder
-.netlify

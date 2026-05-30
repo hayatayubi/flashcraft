@@ -1,11 +1,10 @@
-import type { AIFlashcardBundle, AppState, AuthUser } from './types'
+import type { AppState, AuthUser } from './types'
 
 type ApiErrorPayload = {
   error?: string
 }
 
 export type AppHealth = {
-  aiConfigured: boolean
   ok: true
 }
 
@@ -56,12 +55,6 @@ export function login(payload: { email: string; password: string }) {
   })
 }
 
-export function logout() {
-  return request<{ ok: true }>('/api/auth/logout', {
-    method: 'POST',
-  })
-}
-
 export function fetchRemoteState() {
   return request<{ state: AppState | null }>('/api/app-state')
 }
@@ -70,27 +63,5 @@ export function saveRemoteState(state: AppState) {
   return request<{ ok: true; savedAt: string }>('/api/app-state', {
     body: JSON.stringify({ state }),
     method: 'PUT',
-  })
-}
-
-export async function generateFlashcards(input: {
-  desiredCount: number
-  deckContext?: string
-  notes: string
-  sourceFile?: File | null
-}) {
-  const formData = new FormData()
-  formData.set('desiredCount', String(input.desiredCount))
-  formData.set('notes', input.notes)
-  if (input.deckContext) {
-    formData.set('deckContext', input.deckContext)
-  }
-  if (input.sourceFile) {
-    formData.set('sourceFile', input.sourceFile)
-  }
-
-  return request<{ result: AIFlashcardBundle }>('/api/ai/generate', {
-    body: formData,
-    method: 'POST',
   })
 }

@@ -49,19 +49,3 @@ export type AuthUser = {
   name: string
 }
 
-export type AIFlashcardDraft = {
-  back: string
-  front: string
-  hint: string
-  mnemonic: string
-  tags: string[]
-}
-
-export type AIFlashcardBundle = {
-  cards: AIFlashcardDraft[]
-  sourceExcerpt: string
-  sourceLabel: string
-  suggestedDeckDescription: string
-  suggestedDeckTitle: string
-  summary: string
-}

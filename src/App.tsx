@@ -3,21 +3,44 @@ import './App.css'
 import {
   fetchHealth,
   fetchRemoteState,
-  generateFlashcards,
   getSession,
   login,
-  logout,
   register,
   saveRemoteState,
 } from './api'
 import { createSeedState } from './seed'
 import { applyReviewResult, buildStudyQueue, formatRelativeReview, isDue } from './study'
-import type { AIFlashcardBundle, AIFlashcardDraft, AppState, AuthUser, Card, Deck, ReviewRating } from './types'
+import type { AppState, AuthUser, Card, Deck, ReviewRating } from './types'
 
 const STORAGE_KEY = 'flashcraft-local-state-v3'
-const deckPalette = ['#ff7ab6', '#f06292', '#d94c97', '#f4a6c8', '#c45aa2', '#ff9ecf']
+const THEME_STORAGE_KEY = 'flashcraft-theme'
 
-type Screen = 'deck' | 'decks' | 'study'
+type ThemeId = 'pink' | 'blue' | 'green' | 'red' | 'white'
+
+type ThemeOption = {
+  id: ThemeId
+  name: string
+  blurb: string
+  swatch: [string, string, string]
+}
+
+const THEMES: ThemeOption[] = [
+  { id: 'pink', name: 'Blossom', blurb: 'The original, warm pink', swatch: ['#fff5fb', '#ffb6dd', '#d94c97'] },
+  { id: 'blue', name: 'Tide', blurb: 'Cool blue, calm focus', swatch: ['#eef5ff', '#93c5fd', '#3b82f6'] },
+  { id: 'green', name: 'Sprout', blurb: 'Fresh green, easy on the eyes', swatch: ['#effaf3', '#86efac', '#10b981'] },
+  { id: 'red', name: 'Ember', blurb: 'Bold red, high energy', swatch: ['#fff4f4', '#fca5a5', '#ef4444'] },
+  { id: 'white', name: 'Paper', blurb: 'Minimal grayscale', swatch: ['#fbfbfc', '#e5e7eb', '#4b5563'] },
+]
+
+function loadTheme(): ThemeId {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY)
+    if (stored && THEMES.some((t) => t.id === stored)) return stored as ThemeId
+  } catch {}
+  return 'pink'
+}
+
+type Screen = 'deck' | 'decks' | 'settings' | 'study'
 type AuthMode = 'login' | 'register'
 type SyncStatus = 'error' | 'idle' | 'saved' | 'saving'
 
@@ -52,11 +75,6 @@ type ToastState = {
   onAction?: () => void
   tone: 'error' | 'info' | 'success'
   duration?: number
-}
-
-type AIPreviewCard = AIFlashcardDraft & {
-  id: string
-  selected: boolean
 }
 
 function emptyDeckDraft(): DeckDraft {
@@ -143,32 +161,6 @@ function loadLocalState(): AppState {
   }
 }
 
-function createCardFromDraft(draft: AIFlashcardDraft, deckId: string): Card {
-  const timestamp = new Date().toISOString()
-
-  return {
-    back: draft.back.trim(),
-    createdAt: timestamp,
-    deckId,
-    ease: 2.3,
-    front: draft.front.trim(),
-    hint: draft.hint.trim(),
-    id: crypto.randomUUID(),
-    imageUrls: [],
-    interval: 0,
-    lapses: 0,
-    lastReviewedAt: null,
-    mastery: 18,
-    mnemonic: draft.mnemonic.trim(),
-    nextReviewAt: null,
-    reviewCount: 0,
-    starred: false,
-    streak: 0,
-    tags: draft.tags.map((tag) => tag.trim()).filter(Boolean),
-    updatedAt: timestamp,
-  }
-}
-
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
@@ -191,7 +183,6 @@ function readFilesAsDataUrls(files: File[]) {
 function App() {
   const initialState = loadLocalState()
   const cardImageRef = useRef<HTMLInputElement | null>(null)
-  const aiFileRef = useRef<HTMLInputElement | null>(null)
   const hasHydratedAccountRef = useRef(false)
   const toastIdRef = useRef(0)
 
@@ -208,7 +199,14 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState('')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle')
-  const [aiConfigured, setAiConfigured] = useState(true)
+  const [theme, setTheme] = useState<ThemeId>(() => loadTheme())
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme)
+    } catch {}
+  }, [theme])
 
   const [deckDraft, setDeckDraft] = useState<DeckDraft>(emptyDeckDraft())
   const [deckEditorId, setDeckEditorId] = useState<string | null>(null)
@@ -225,14 +223,6 @@ function App() {
   const [studyIndex, setStudyIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [sessionStats, setSessionStats] = useState<SessionStats>(emptySessionStats())
-
-  const [aiNotes, setAiNotes] = useState('')
-  const [aiFile, setAiFile] = useState<File | null>(null)
-  const [aiBusy, setAiBusy] = useState(false)
-  const [aiCount, setAiCount] = useState(8)
-  const [aiError, setAiError] = useState('')
-  const [aiResult, setAiResult] = useState<AIFlashcardBundle | null>(null)
-  const [aiPreviewCards, setAiPreviewCards] = useState<AIPreviewCard[]>([])
 
   const [toast, setToast] = useState<ToastState | null>(null)
 
@@ -255,7 +245,6 @@ function App() {
   const currentCard = currentCardId ? cards.find((card) => card.id === currentCardId) ?? null : null
   const previewCard = previewCardId ? cards.find((card) => card.id === previewCardId) ?? null : null
   const sessionComplete = studyQueue.length > 0 && !currentCard
-  const selectedAIPreviewCount = aiPreviewCards.filter((card) => card.selected).length
   const studyProgress = studyQueue.length ? Math.min(100, Math.round((studyIndex / studyQueue.length) * 100)) : 0
 
   function pushToast(
@@ -302,8 +291,7 @@ function App() {
 
   const bootstrapSession = useEffectEvent(async () => {
     try {
-      const health = await fetchHealth()
-      setAiConfigured(health.aiConfigured)
+      await fetchHealth()
       const session = await getSession()
       if (session.user) {
         await hydrateSignedInUser(session.user)
@@ -418,17 +406,6 @@ function App() {
     }
   }
 
-  async function handleLogout() {
-    try {
-      await logout()
-    } finally {
-      setSessionUser(null)
-      setSessionReady(false)
-      setSyncStatus('idle')
-      setScreen('decks')
-    }
-  }
-
   function handleSaveDeck(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!deckDraft.title.trim()) return
@@ -437,7 +414,7 @@ function App() {
     const previousDeck = deckEditorId ? decks.find((deck) => deck.id === deckEditorId) ?? null : null
 
     const nextDeck: Deck = {
-      color: previousDeck?.color ?? deckPalette[decks.length % deckPalette.length] ?? deckPalette[0],
+      color: previousDeck?.color ?? '',
       createdAt: previousDeck?.createdAt ?? timestamp,
       dailyGoal: previousDeck?.dailyGoal ?? 12,
       description: deckDraft.description.trim(),
@@ -491,12 +468,6 @@ function App() {
   function resetCardComposer() {
     setCardEditorId(null)
     setCardDraft(emptyCardDraft())
-  }
-
-  function clearAIReview() {
-    setAiResult(null)
-    setAiPreviewCards([])
-    setAiError('')
   }
 
   function openNewCardComposer() {
@@ -636,75 +607,6 @@ function App() {
     setRevealed(false)
   }
 
-  async function handleGenerateWithAI() {
-    if (!activeDeck) return
-    if (!aiConfigured) {
-      setAiError('AI generation is unavailable until OPENAI_API_KEY is configured on the server.')
-      return
-    }
-
-    setAiBusy(true)
-    setAiError('')
-
-    try {
-      const response = await generateFlashcards({
-        deckContext: `${activeDeck.title}: ${activeDeck.description || 'No description'}`,
-        desiredCount: aiCount,
-        notes: aiNotes,
-        sourceFile: aiFile,
-      })
-      setAiResult(response.result)
-      setAiPreviewCards(
-        response.result.cards.map((card) => ({
-          ...card,
-          id: crypto.randomUUID(),
-          selected: true,
-        })),
-      )
-      pushToast('AI cards ready to review.')
-    } catch (error) {
-      setAiError(error instanceof Error ? error.message : 'AI generation failed.')
-    } finally {
-      setAiBusy(false)
-    }
-  }
-
-  function handleImportAICards() {
-    if (!activeDeck || !aiResult) return
-
-    const selectedCards = aiPreviewCards.filter((card) => card.selected)
-    if (!selectedCards.length) {
-      pushToast('Select at least one AI card to import.', 'error')
-      return
-    }
-
-    const nextCards = selectedCards.map((draft) => createCardFromDraft(draft, activeDeck.id))
-    setCards((current) => [...nextCards, ...current])
-    clearAIReview()
-    setAiNotes('')
-    setAiFile(null)
-    if (aiFileRef.current) {
-      aiFileRef.current.value = ''
-    }
-    pushToast('AI cards imported.')
-  }
-
-  function updateAIPreviewCard(cardId: string, field: 'back' | 'front', value: string) {
-    setAiPreviewCards((current) =>
-      current.map((card) => (card.id === cardId ? { ...card, [field]: value } : card)),
-    )
-  }
-
-  function toggleAIPreviewCard(cardId: string) {
-    setAiPreviewCards((current) =>
-      current.map((card) => (card.id === cardId ? { ...card, selected: !card.selected } : card)),
-    )
-  }
-
-  function setAllAIPreviewCards(selected: boolean) {
-    setAiPreviewCards((current) => current.map((card) => ({ ...card, selected })))
-  }
-
   const onWindowKeyDown = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null
     const isTypingTarget =
@@ -764,10 +666,8 @@ function App() {
       <div className="auth-shell auth-shell-stacked">
         <section className="auth-aside">
           <p className="eyebrow">Flashcraft</p>
-          <h1>Simple flashcards, saved to your account.</h1>
-          <p className="muted">
-            Create decks, add cards, study one deck at a time, and use AI when you want help turning notes into cards.
-          </p>
+          <h1>Simple flashcards, saved to your device.</h1>
+          <p className="muted">Create decks, add cards, and study one deck at a time.</p>
         </section>
         <section className="auth-panel">
           <div className="section-heading">
@@ -837,21 +737,22 @@ function App() {
         </div>
         <div className="header-actions">
           <span className={`save-pill ${syncStatus}`}>{syncStatus === 'saved' ? 'Saved' : syncStatus}</span>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setScreen(screen === 'settings' ? 'decks' : 'settings')}
+          >
+            {screen === 'settings' ? 'Done' : 'Settings'}
+          </button>
           <div className="account-chip">
             <strong>{sessionUser.name}</strong>
-            <button className="text-button" type="button" onClick={handleLogout}>
-              Sign out
-            </button>
           </div>
         </div>
       </header>
 
-      {(syncStatus === 'error' || !aiConfigured) && (
+      {syncStatus === 'error' && (
         <section className="status-banner">
-          {syncStatus === 'error' && (
-            <p>We could not save your latest changes to the account server. Your browser copy is still intact.</p>
-          )}
-          {!aiConfigured && <p>AI card creation is unavailable until `OPENAI_API_KEY` is configured on the server.</p>}
+          <p>We could not save your latest changes to the account server. Your browser copy is still intact.</p>
         </section>
       )}
 
@@ -862,9 +763,7 @@ function App() {
               <div>
                 <p className="eyebrow">My Decks</p>
                 <h1>Build a deck, add cards, then study.</h1>
-                <p className="muted">
-                  The app is now focused on the basics: decks, cards, study, and AI help when you want it.
-                </p>
+                <p className="muted">Decks, cards, study sessions. Nothing else in the way.</p>
               </div>
               <button className="primary-button" type="button" onClick={openNewDeckComposer}>
                 New deck
@@ -935,7 +834,7 @@ function App() {
                   const dueCount = cards.filter((card) => card.deckId === deck.id && isDue(card)).length
 
                   return (
-                    <article key={deck.id} className="deck-card" style={{ '--deck-accent': deck.color } as React.CSSProperties}>
+                    <article key={deck.id} className="deck-card">
                       <div className="deck-card-copy">
                         <p className="eyebrow">Deck</p>
                         <h2>{deck.title}</h2>
@@ -963,7 +862,7 @@ function App() {
 
         {screen === 'deck' && activeDeck && (
           <section className="screen-stack">
-            <section className="deck-page-header panel" style={{ '--deck-accent': activeDeck.color } as React.CSSProperties}>
+            <section className="deck-page-header">
               <div>
                 <button className="text-link" type="button" onClick={() => setScreen('decks')}>
                   Back to decks
@@ -1083,8 +982,13 @@ function App() {
                         {cardDraft.imageUrls.map((imageUrl, index) => (
                           <div key={`${imageUrl}-${index}`} className="image-preview">
                             <img src={imageUrl} alt={`Card image ${index + 1}`} />
-                            <button className="image-remove-button" type="button" onClick={() => removeCardImage(index)}>
-                              Remove
+                            <button
+                              className="image-remove-button"
+                              type="button"
+                              aria-label="Remove image"
+                              onClick={() => removeCardImage(index)}
+                            >
+                              ×
                             </button>
                           </div>
                         ))}
@@ -1109,120 +1013,6 @@ function App() {
                 )}
               </article>
 
-              <article className="panel">
-                <div className="section-heading">
-                  <h2>AI card creation</h2>
-                  <span>{aiConfigured ? 'Generate from notes or PDF' : 'Needs configuration'}</span>
-                </div>
-                <p className="muted">
-                  Paste notes or upload a PDF, then review the generated cards before adding them to this deck.
-                </p>
-                {!aiConfigured && (
-                  <div className="inline-notice">
-                    <strong>AI is currently unavailable.</strong>
-                    <p>Add `OPENAI_API_KEY` to the server environment to enable generation.</p>
-                  </div>
-                )}
-                <div className="stack-form">
-                  <label>
-                    <span>Notes</span>
-                    <textarea
-                      rows={7}
-                      value={aiNotes}
-                      onChange={(event) => setAiNotes(event.target.value)}
-                      placeholder="Paste your notes here..."
-                    />
-                  </label>
-                  <div className="split-row">
-                    <label>
-                      <span>Cards</span>
-                      <input
-                        type="number"
-                        min={4}
-                        max={24}
-                        value={aiCount}
-                        onChange={(event) => setAiCount(Math.max(4, Math.min(24, Number(event.target.value) || 8)))}
-                      />
-                    </label>
-                    <div className="file-field">
-                      <span>Optional file</span>
-                      <input
-                        ref={aiFileRef}
-                        className="hidden-input"
-                        type="file"
-                        accept=".pdf,.txt,.md,text/plain,application/pdf"
-                        onChange={(event) => setAiFile(event.target.files?.[0] ?? null)}
-                      />
-                      <button className="secondary-button" type="button" onClick={() => aiFileRef.current?.click()}>
-                        {aiFile ? 'Change file' : 'Upload file'}
-                      </button>
-                    </div>
-                  </div>
-                  {aiFile && <span className="file-pill">{aiFile.name}</span>}
-                  <button className="primary-button" type="button" onClick={handleGenerateWithAI} disabled={aiBusy || !aiConfigured}>
-                    {aiBusy ? 'Generating cards...' : 'Generate cards'}
-                  </button>
-                  {aiError && <p className="form-error">{aiError}</p>}
-                </div>
-
-                {aiResult && (
-                  <div className="ai-preview">
-                    <div className="section-heading">
-                      <h2>Review AI cards</h2>
-                      <span>{selectedAIPreviewCount} selected</span>
-                    </div>
-                    <p className="muted">{aiResult.summary}</p>
-                    <div className="button-row">
-                      <button className="secondary-button" type="button" onClick={() => setAllAIPreviewCards(true)}>
-                        Select all
-                      </button>
-                      <button className="secondary-button" type="button" onClick={() => setAllAIPreviewCards(false)}>
-                        Clear selection
-                      </button>
-                    </div>
-                    <div className="card-list compact">
-                      {aiPreviewCards.map((card) => (
-                        <article key={card.id} className="card-row ai-card-row">
-                          <label className="select-chip">
-                            <input
-                              type="checkbox"
-                              checked={card.selected}
-                              onChange={() => toggleAIPreviewCard(card.id)}
-                            />
-                            <span>{card.selected ? 'Selected' : 'Skipped'}</span>
-                          </label>
-                          <div className="ai-card-editor">
-                            <label>
-                              <span>Question</span>
-                              <textarea
-                                rows={2}
-                                value={card.front}
-                                onChange={(event) => updateAIPreviewCard(card.id, 'front', event.target.value)}
-                              />
-                            </label>
-                            <label>
-                              <span>Answer</span>
-                              <textarea
-                                rows={4}
-                                value={card.back}
-                                onChange={(event) => updateAIPreviewCard(card.id, 'back', event.target.value)}
-                              />
-                            </label>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    <div className="button-row">
-                      <button className="primary-button" type="button" onClick={handleImportAICards}>
-                        Add to deck
-                      </button>
-                      <button className="secondary-button" type="button" onClick={clearAIReview}>
-                        Discard
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </article>
             </section>
 
             <section className="panel">
@@ -1352,33 +1142,27 @@ function App() {
                   onClick={() => setRevealed((value) => !value)}
                 >
                   <div className="flip-card-shell">
-                    <div className="flip-card-face flip-card-front">
-                      <p className="eyebrow">Question</p>
-                      {currentCard.imageUrls.length > 0 && (
-                        <div className="study-image-grid">
-                          {currentCard.imageUrls.map((imageUrl, index) => (
-                            <div key={`${currentCard.id}-front-${index}`} className="study-image">
-                              <img src={imageUrl} alt="" />
-                            </div>
-                          ))}
-                        </div>
+                    <div className={`flip-card-face flip-card-front${currentCard.imageUrls.length > 0 ? ' has-image' : ''}`}>
+                      {currentCard.imageUrls[0] && (
+                        <div
+                          className="flip-card-bg"
+                          style={{ backgroundImage: `url(${currentCard.imageUrls[0]})` }}
+                        />
                       )}
+                      <p className="eyebrow">Question</p>
                       <div className="study-copy">
                         <h2>{currentCard.front}</h2>
                         <span className="muted">Tap to reveal the answer</span>
                       </div>
                     </div>
-                    <div className="flip-card-face flip-card-back">
-                      <p className="eyebrow">Answer</p>
-                      {currentCard.imageUrls.length > 0 && (
-                        <div className="study-image-grid">
-                          {currentCard.imageUrls.map((imageUrl, index) => (
-                            <div key={`${currentCard.id}-back-${index}`} className="study-image">
-                              <img src={imageUrl} alt="" />
-                            </div>
-                          ))}
-                        </div>
+                    <div className={`flip-card-face flip-card-back${currentCard.imageUrls.length > 0 ? ' has-image' : ''}`}>
+                      {currentCard.imageUrls[0] && (
+                        <div
+                          className="flip-card-bg"
+                          style={{ backgroundImage: `url(${currentCard.imageUrls[0]})` }}
+                        />
                       )}
+                      <p className="eyebrow">Answer</p>
                       <div className="study-copy">
                         <h2>{currentCard.back}</h2>
                         <span className="muted">Tap to see the question again</span>
@@ -1409,6 +1193,49 @@ function App() {
             )}
           </section>
         )}
+
+        {screen === 'settings' && (
+          <section className="screen-stack">
+            <section className="hero-card">
+              <div>
+                <p className="eyebrow">Settings</p>
+                <h1>Make Flashcraft your own.</h1>
+                <p className="muted">Pick a color theme. Your choice is saved on this device.</p>
+              </div>
+              <button className="secondary-button" type="button" onClick={() => setScreen('decks')}>
+                Back to decks
+              </button>
+            </section>
+
+            <section className="panel">
+              <div className="section-heading">
+                <h2>Theme</h2>
+                <span>Five looks, one click to switch</span>
+              </div>
+              <div className="theme-picker">
+                {THEMES.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`theme-swatch${theme === option.id ? ' active' : ''}`}
+                    onClick={() => setTheme(option.id)}
+                  >
+                    <div className="theme-swatch-preview" aria-hidden="true">
+                      {option.swatch.map((color, index) => (
+                        <span key={index} style={{ background: color }} />
+                      ))}
+                    </div>
+                    <div className="theme-swatch-name">
+                      <span>{option.name}</span>
+                      {theme === option.id && <span className="theme-swatch-check">Selected</span>}
+                    </div>
+                    <span className="muted">{option.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </section>
+        )}
       </main>
 
       {previewCard && (
@@ -1429,33 +1256,27 @@ function App() {
               onClick={() => setPreviewRevealed((value) => !value)}
             >
               <div className="flip-card-shell preview-flip-card">
-                <div className="flip-card-face flip-card-front">
-                  <p className="eyebrow">Question</p>
-                  {previewCard.imageUrls.length > 0 && (
-                    <div className="study-image-grid">
-                      {previewCard.imageUrls.map((imageUrl, index) => (
-                        <div key={`${previewCard.id}-preview-front-${index}`} className="study-image">
-                          <img src={imageUrl} alt="" />
-                        </div>
-                      ))}
-                    </div>
+                <div className={`flip-card-face flip-card-front${previewCard.imageUrls.length > 0 ? ' has-image' : ''}`}>
+                  {previewCard.imageUrls[0] && (
+                    <div
+                      className="flip-card-bg"
+                      style={{ backgroundImage: `url(${previewCard.imageUrls[0]})` }}
+                    />
                   )}
+                  <p className="eyebrow">Question</p>
                   <div className="study-copy">
                     <h2>{previewCard.front}</h2>
                     <span className="muted">Tap to flip to the answer</span>
                   </div>
                 </div>
-                <div className="flip-card-face flip-card-back">
-                  <p className="eyebrow">Answer</p>
-                  {previewCard.imageUrls.length > 0 && (
-                    <div className="study-image-grid">
-                      {previewCard.imageUrls.map((imageUrl, index) => (
-                        <div key={`${previewCard.id}-preview-back-${index}`} className="study-image">
-                          <img src={imageUrl} alt="" />
-                        </div>
-                      ))}
-                    </div>
+                <div className={`flip-card-face flip-card-back${previewCard.imageUrls.length > 0 ? ' has-image' : ''}`}>
+                  {previewCard.imageUrls[0] && (
+                    <div
+                      className="flip-card-bg"
+                      style={{ backgroundImage: `url(${previewCard.imageUrls[0]})` }}
+                    />
                   )}
+                  <p className="eyebrow">Answer</p>
                   <div className="study-copy">
                     <h2>{previewCard.back}</h2>
                     <span className="muted">Tap to flip back to the question</span>

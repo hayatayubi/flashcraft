@@ -1,71 +1,55 @@
 # Flashcraft
 
-Flashcraft is a modern flashcard web app for revision. It includes:
+A simple flashcard app for macOS. Build decks, add cards, study with spaced repetition. Runs entirely on your machine — no accounts, no cloud, no internet required.
 
-- Account creation and sign-in
-- Per-user saved progress
+## Features
+
 - Deck and card management
-- Spaced-repetition study sessions
-- AI-assisted flashcard generation from pasted notes or uploaded PDFs
-- JSON backup import and export
+- Spaced-repetition study sessions (hard / medium / easy)
+- Card images sit as a tasteful background behind the question, not on top of it
+- Five color themes (Blossom, Tide, Sprout, Ember, Paper) — your choice persists between launches
+- Auto sign-in: data stays on this device
 
-## Project structure
-
-- `src/` contains the React frontend
-- `netlify/functions/api.mjs` contains the API for auth, saved progress, and AI imports
-- `server/index.mjs` is kept as a legacy local server path
-
-## Environment
-
-Copy `.env.example` to `.env` and set:
-
-```bash
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5.4
-JWT_SECRET=replace_this_with_a_long_random_secret
-```
-
-`OPENAI_API_KEY` is required for AI note/PDF imports. The rest of the app works without it.
-
-## Run locally
+## Run from source
 
 ```bash
 npm install
-npm run dev
+npm run electron:dev
 ```
 
-This starts Netlify local dev (frontend + functions) and serves the app on `http://localhost:8888` by default.
+`electron:dev` builds the Vite frontend and launches Electron. Data lives at `~/Library/Application Support/Flashcraft/`.
 
-## Build
+## Build a macOS distributable
 
 ```bash
-npm run build
+npm run dist:mac
 ```
 
-## Legacy local run (optional)
+Outputs to `release/`:
+
+- `Flashcraft-1.0.0-arm64.dmg` — Apple Silicon
+- `Flashcraft-1.0.0.dmg` — Intel
+
+The build is unsigned. On first launch, right-click `Flashcraft.app` → Open → Open to bypass Gatekeeper.
+
+## Refresh the app icon
+
+If macOS keeps showing an old icon after an update:
 
 ```bash
-npm run build
-npm run dev:legacy
+killall Dock && killall Finder
 ```
 
-## Notes
+## Project layout
 
-- Production account/state data is stored in Netlify Blobs.
-- AI imports use the OpenAI Responses API with structured JSON output.
-- Uploaded PDFs are parsed locally before the extracted text is sent to the model.
+- `src/` — React frontend (Vite + TypeScript)
+- `server/` — Express server, bundled inside the Electron app; stores decks in JSON
+- `electron/` — Electron main process; boots the server and opens the window
+- `build/` — `icon.svg` source + `render-icons.mjs` to regenerate the iconset
+- `public/` — static assets served by Vite
 
-## Deploy to Netlify
+## Editing the app icon
 
-1. Push this repo to GitHub.
-2. In Netlify, create a new site from that repo.
-3. Build settings are already defined in `netlify.toml`:
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-4. In Netlify Site settings -> Environment variables, add:
-   - `OPENAI_API_KEY`
-   - `OPENAI_MODEL` (optional, default `gpt-5.4`)
-   - `JWT_SECRET` (required, use a long random value)
-5. Deploy.
-
-After deploy, `/api/*` requests are automatically routed to the Netlify Function.
+1. Edit `build/icon.svg`
+2. `node build/render-icons.mjs && iconutil -c icns build/icon.iconset -o build/icon.icns`
+3. `npm run dist:mac`
