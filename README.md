@@ -10,6 +10,22 @@ A simple flashcard app for macOS. Build decks, add cards, study with spaced repe
 - Five color themes (Blossom, Tide, Sprout, Ember, Paper) — your choice persists between launches
 - Auto sign-in: data stays on this device
 
+## Download
+
+Grab the latest `Flashcraft-x.y.z-arm64.dmg` (Apple Silicon) or `Flashcraft-x.y.z.dmg` (Intel) from the [Releases page](https://github.com/hayatayubi/flashcraft/releases/latest), open the DMG, and drag `Flashcraft.app` to `/Applications`.
+
+Because the app is unsigned, macOS will quarantine it on first launch. Pick one:
+
+**One-liner (recommended):**
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Flashcraft.app && open /Applications/Flashcraft.app
+```
+
+**Or, no terminal:** right-click `Flashcraft.app` in `/Applications`, choose *Open*, then click *Open* in the warning dialog. After that one bypass, future launches work normally.
+
+Your decks live at `~/Library/Application Support/Flashcraft/` so updating the app never touches your data.
+
 ## Run from source
 
 ```bash
