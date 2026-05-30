@@ -14,6 +14,32 @@ import type { AppState, AuthUser, Card, Deck, ReviewRating } from './types'
 
 const STORAGE_KEY = 'flashcraft-local-state-v3'
 const THEME_STORAGE_KEY = 'flashcraft-theme'
+const STUDY_MODE_STORAGE_KEY = 'flashcraft-study-mode'
+
+type StudyMode = 'flip' | 'write'
+
+function loadStudyMode(): StudyMode {
+  try {
+    const stored = localStorage.getItem(STUDY_MODE_STORAGE_KEY)
+    if (stored === 'flip' || stored === 'write') return stored
+  } catch {}
+  return 'flip'
+}
+
+function normalizeAnswer(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+}
+
+function isAnswerCorrect(typed: string, correct: string): boolean {
+  const a = normalizeAnswer(typed)
+  const b = normalizeAnswer(correct)
+  if (!a || !b) return false
+  return a === b
+}
 
 type ThemeId = 'pink' | 'blue' | 'green' | 'red' | 'white'
 
@@ -210,7 +236,7 @@ function App() {
 
   const [deckDraft, setDeckDraft] = useState<DeckDraft>(emptyDeckDraft())
   const [deckEditorId, setDeckEditorId] = useState<string | null>(null)
-  const [deckComposerOpen, setDeckComposerOpen] = useState(initialState.decks.length === 0)
+  const [deckComposerOpen, setDeckComposerOpen] = useState(false)
 
   const [cardDraft, setCardDraft] = useState<CardDraft>(emptyCardDraft())
   const [cardEditorId, setCardEditorId] = useState<string | null>(null)
@@ -223,6 +249,15 @@ function App() {
   const [studyIndex, setStudyIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [sessionStats, setSessionStats] = useState<SessionStats>(emptySessionStats())
+  const [studyMode, setStudyMode] = useState<StudyMode>(() => loadStudyMode())
+  const [typedAnswer, setTypedAnswer] = useState('')
+  const [answerCorrect, setAnswerCorrect] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STUDY_MODE_STORAGE_KEY, studyMode)
+    } catch {}
+  }, [studyMode])
 
   const [toast, setToast] = useState<ToastState | null>(null)
 
@@ -267,7 +302,7 @@ function App() {
     setDecks(state.decks)
     setCards(state.cards.map((card) => normalizeCard(card)))
     setActiveDeckId(state.activeDeckId)
-    setDeckComposerOpen(state.decks.length === 0)
+    setDeckComposerOpen(false)
   }
 
   async function hydrateSignedInUser(user: AuthUser) {
@@ -451,7 +486,7 @@ function App() {
     setCards((current) => current.filter((card) => card.deckId !== deckId))
     setActiveDeckId(remainingDecks[0]?.id ?? null)
     setScreen('decks')
-    setDeckComposerOpen(remainingDecks.length === 0)
+    setDeckComposerOpen(false)
     resetDeckComposer()
     pushToast('Deck deleted.', 'info', {
       actionLabel: 'Undo',
@@ -588,6 +623,8 @@ function App() {
       setStudyQueue(nextQueue)
       setStudyIndex(0)
       setRevealed(false)
+      setTypedAnswer('')
+      setAnswerCorrect(null)
       setSessionStats(emptySessionStats())
     })
   }
@@ -605,6 +642,15 @@ function App() {
     }))
     setStudyIndex((current) => current + 1)
     setRevealed(false)
+    setTypedAnswer('')
+    setAnswerCorrect(null)
+  }
+
+  function handleCheckTypedAnswer(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!currentCard) return
+    setAnswerCorrect(isAnswerCorrect(typedAnswer, currentCard.back))
+    setRevealed(true)
   }
 
   const onWindowKeyDown = useEffectEvent((event: KeyboardEvent) => {
@@ -729,14 +775,14 @@ function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="brand-block">
-          <button className="brand-button" type="button" onClick={() => setScreen('decks')}>
-            Flashcraft
-          </button>
-          <p className="muted">{screen === 'study' && activeDeck ? activeDeck.title : 'My Decks'}</p>
-        </div>
-        <div className="header-actions">
+        <div className="header-side header-side-left">
           <span className={`save-pill ${syncStatus}`}>{syncStatus === 'saved' ? 'Saved' : syncStatus}</span>
+        </div>
+        <button className="brand-button" type="button" onClick={() => setScreen('decks')} aria-label="Flashcraft home">
+          <span className="brand-mark">F</span>
+          <span className="brand-word">lashcraft</span>
+        </button>
+        <div className="header-side header-side-right">
           <button
             className="secondary-button"
             type="button"
@@ -744,9 +790,7 @@ function App() {
           >
             {screen === 'settings' ? 'Done' : 'Settings'}
           </button>
-          <div className="account-chip">
-            <strong>{sessionUser.name}</strong>
-          </div>
+          <span className="account-chip">{sessionUser.name}</span>
         </div>
       </header>
 
@@ -765,9 +809,11 @@ function App() {
                 <h1>Build a deck, add cards, then study.</h1>
                 <p className="muted">Decks, cards, study sessions. Nothing else in the way.</p>
               </div>
-              <button className="primary-button" type="button" onClick={openNewDeckComposer}>
-                New deck
-              </button>
+              {decks.length > 0 && !deckComposerOpen && (
+                <button className="primary-button" type="button" onClick={openNewDeckComposer}>
+                  New deck
+                </button>
+              )}
             </section>
 
             {deckComposerOpen && (
@@ -814,7 +860,7 @@ function App() {
               </section>
             )}
 
-            {!decks.length ? (
+            {!decks.length && !deckComposerOpen ? (
               <section className="empty-card">
                 <div className="empty-illustration" aria-hidden="true">
                   <span />
@@ -827,7 +873,7 @@ function App() {
                   Create first deck
                 </button>
               </section>
-            ) : (
+            ) : !decks.length ? null : (
               <section className="deck-grid">
                 {decks.map((deck) => {
                   const deckCardCount = cards.filter((card) => card.deckId === deck.id).length
@@ -1076,6 +1122,36 @@ function App() {
               <button className="text-link" type="button" onClick={() => setScreen('deck')}>
                 Back to deck
               </button>
+              <div className="mode-toggle" role="tablist" aria-label="Study mode">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studyMode === 'flip'}
+                  className={studyMode === 'flip' ? 'mode-toggle-option active' : 'mode-toggle-option'}
+                  onClick={() => {
+                    setStudyMode('flip')
+                    setRevealed(false)
+                    setAnswerCorrect(null)
+                    setTypedAnswer('')
+                  }}
+                >
+                  Flip
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={studyMode === 'write'}
+                  className={studyMode === 'write' ? 'mode-toggle-option active' : 'mode-toggle-option'}
+                  onClick={() => {
+                    setStudyMode('write')
+                    setRevealed(false)
+                    setAnswerCorrect(null)
+                    setTypedAnswer('')
+                  }}
+                >
+                  Type
+                </button>
+              </div>
               <span className="muted">
                 {Math.min(studyIndex + 1, studyQueue.length)} of {studyQueue.length || 0}
               </span>
@@ -1139,7 +1215,9 @@ function App() {
                   key={currentCard.id}
                   className={revealed ? 'study-card revealed' : 'study-card'}
                   type="button"
-                  onClick={() => setRevealed((value) => !value)}
+                  onClick={() => {
+                    if (studyMode === 'flip') setRevealed((value) => !value)
+                  }}
                 >
                   <div className="flip-card-shell">
                     <div className={`flip-card-face flip-card-front${currentCard.imageUrls.length > 0 ? ' has-image' : ''}`}>
@@ -1172,6 +1250,41 @@ function App() {
                 </button>
 
                 <div className="study-actions">
+                  {studyMode === 'write' && !revealed && (
+                    <form className="answer-form" onSubmit={handleCheckTypedAnswer}>
+                      <label className="answer-input-label">
+                        <span>Type your answer</span>
+                        <textarea
+                          rows={2}
+                          value={typedAnswer}
+                          onChange={(event) => setTypedAnswer(event.target.value)}
+                          placeholder="Your answer..."
+                          autoFocus
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault()
+                              ;(event.currentTarget.form as HTMLFormElement | null)?.requestSubmit()
+                            }
+                          }}
+                        />
+                      </label>
+                      <button className="primary-button" type="submit" disabled={!typedAnswer.trim()}>
+                        Check answer
+                      </button>
+                    </form>
+                  )}
+
+                  {studyMode === 'write' && revealed && answerCorrect !== null && (
+                    <div className={`answer-result ${answerCorrect ? 'correct' : 'incorrect'}`}>
+                      <strong>{answerCorrect ? 'Correct' : 'Not quite'}</strong>
+                      {!answerCorrect && (
+                        <p>
+                          You wrote: <em>{typedAnswer || '(blank)'}</em>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {revealed ? (
                     <div className="button-row center">
                       <button className="danger-button" type="button" onClick={() => handleReview('hard')}>
@@ -1184,10 +1297,13 @@ function App() {
                         Easy
                       </button>
                     </div>
-                  ) : (
+                  ) : studyMode === 'flip' ? (
                     <p className="muted">Reveal the answer, then rate how well you knew it.</p>
+                  ) : null}
+
+                  {studyMode === 'flip' && (
+                    <p className="study-hint muted">Keyboard: <code>space</code> to reveal, <code>1</code> hard, <code>2</code> medium, <code>3</code> easy.</p>
                   )}
-                  <p className="study-hint muted">Keyboard: `space` to reveal, `1` hard, `2` medium, `3` easy.</p>
                 </div>
               </>
             )}
