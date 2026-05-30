@@ -756,6 +756,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <div className="window-drag-bar" aria-hidden="true" />
       <header className="app-header">
         <div className="header-side header-side-left">
           <span className={`save-pill ${syncStatus}`}>{syncStatus === 'saved' ? 'Saved' : syncStatus}</span>

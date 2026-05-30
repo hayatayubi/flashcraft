@@ -1,6 +1,18 @@
 .app-shell {
   min-height: 100vh;
-  padding: 20px;
+  padding: 0 20px 20px;
+}
+
+.window-drag-bar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  margin: 0 -20px;
+  -webkit-app-region: drag;
+  app-region: drag;
+  z-index: 50;
 }
 
 .app-header,
@@ -24,6 +36,14 @@
   align-items: center;
   padding: 16px 24px;
   margin-bottom: 24px;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.app-header button,
+.app-header input {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .header-side {
