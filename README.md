@@ -1,59 +1,51 @@
 # Flashcraft
 
-A simple flashcard app for macOS. Build decks, add cards, study with spaced repetition. Runs entirely on your machine — no accounts, no cloud, no internet required.
+A flashcard app for macOS. Make decks, add cards and study them with spaced repetition. It runs on your Mac with no account and no internet connection.
 
-## Features
+## What it does
 
-- Deck and card management
-- Spaced-repetition study sessions (hard / medium / easy)
-- Card images sit as a tasteful background behind the question, not on top of it
-- Five color themes (Blossom, Tide, Sprout, Ember, Paper) — your choice persists between launches
-- Auto sign-in: data stays on this device
+- Decks and cards
+- Study sessions with spaced repetition (rate each card hard, medium or easy)
+- Optional images on cards, shown faintly behind the question
+- Five colour themes: Blossom, Tide, Sprout, Ember and Paper. Your choice is remembered.
+- Your decks stay on your Mac in `~/Library/Application Support/Flashcraft/`, and updates keep them
 
 ## Install
 
-1. Download the latest **[Flashcraft.dmg](https://github.com/hayatayubi/flashcraft/releases/latest)**.
-2. Open the DMG and drag `Flashcraft` into the `Applications` folder.
-3. Double-click `Flashcraft` in Applications. macOS will block it — click **OK**.
-4. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.
+1. Download **[Flashcraft.dmg](https://github.com/hayatayubi/flashcraft/releases/latest)**.
+2. Open it and drag Flashcraft into Applications.
 
-That's it. The DMG is a universal binary, so the same download works on Apple Silicon and Intel Macs. Your decks live at `~/Library/Application Support/Flashcraft/` and are preserved across updates.
+The app is signed and notarised, and it's a universal build, so it runs on Apple Silicon and Intel Macs.
 
-## Run from source
+## Running from source
 
 ```bash
 npm install
 npm run electron:dev
 ```
 
-`electron:dev` builds the Vite frontend and launches Electron. Data lives at `~/Library/Application Support/Flashcraft/`.
+This builds the Vite frontend and starts Electron.
 
-## Build a macOS distributable
+## Building the Mac app
 
 ```bash
 npm run dist:mac
 ```
 
-Outputs `release/Flashcraft.dmg` — a single universal binary (arm64 + x64), ad-hoc signed so macOS shows the "Open Anyway" flow instead of the "damaged" error.
-
-## Refresh the app icon
-
-If macOS keeps showing an old icon after an update:
-
-```bash
-killall Dock && killall Finder
-```
+That writes `release/Flashcraft.dmg`, a universal build that's ad-hoc signed. For a release build, sign with a Developer ID certificate with the hardened runtime turned on, then notarise the DMG with `notarytool` and staple the ticket.
 
 ## Project layout
 
-- `src/` — React frontend (Vite + TypeScript)
-- `server/` — Express server, bundled inside the Electron app; stores decks in JSON
-- `electron/` — Electron main process; boots the server and opens the window
-- `build/` — `icon.svg` source + `render-icons.mjs` to regenerate the iconset
-- `public/` — static assets served by Vite
+- `src/`: React frontend (Vite and TypeScript)
+- `server/`: small Express server that stores decks as JSON. It's bundled into the Electron app.
+- `electron/`: Electron main process. It starts the server and opens the window.
+- `build/`: the icon source (`icon.svg`) and `render-icons.mjs` to regenerate the icon set
+- `public/`: static assets
 
-## Editing the app icon
+## Changing the icon
 
 1. Edit `build/icon.svg`
-2. `node build/render-icons.mjs && iconutil -c icns build/icon.iconset -o build/icon.icns`
-3. `npm run dist:mac`
+2. Run `node build/render-icons.mjs && iconutil -c icns build/icon.iconset -o build/icon.icns`
+3. Run `npm run dist:mac`
+
+If macOS keeps showing the old icon, run `killall Dock && killall Finder`.
